@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "eg2.tslint",
+    "esbenp.prettier-vscode",
+    "eamodio.gitlens",
+    "dtsvet.vscode-wasm",
+    "wayou.vscode-todo-highlight"
+  ]
+}
