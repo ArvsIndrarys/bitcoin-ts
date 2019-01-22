@@ -25,6 +25,7 @@ RUN emcc src/libsecp256k1_la-secp256k1.o \
   # -O0 -g4 -s ASSERTIONS=2 --source-map-base ../../../wasm/secp256k1 \
   # uncomment next line for production build:
   -O3 \
+  -s TOTAL_MEMORY=33554432 \
   -s WASM=1 \
   -s "BINARYEN_METHOD='native-wasm'" \
   -s NO_EXIT_RUNTIME=1 \

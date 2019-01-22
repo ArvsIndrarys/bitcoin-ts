@@ -870,7 +870,7 @@ export const instantiateSecp256k1WasmBytes = async (
   const GLOBAL_BASE = 1024;
   const WASM_PAGE_SIZE = 65536;
   const TOTAL_STACK = 5242880;
-  const TOTAL_MEMORY = 16777216;
+  const TOTAL_MEMORY = 33554432;
 
   const wasmMemory = new WebAssembly.Memory({
     initial: TOTAL_MEMORY / WASM_PAGE_SIZE,
