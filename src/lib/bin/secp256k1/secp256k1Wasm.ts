@@ -144,6 +144,13 @@ export interface Secp256k1Wasm {
   readonly mallocUint8Array: (array: Uint8Array) => number;
 
   /**
+  * Allocates space for the provided array, and assigns the array to the space.
+  *
+  * @param array a Uint32Array to allocate in WebAssembly memory
+  */
+  readonly mallocUint32Array: (array: Uint32Array) => number;
+
+  /**
    * Tweak a _privateKey_ by adding _tweak_ to it.
    * Returns 1 if adding succeeded, 0 otherwise.
    *
@@ -265,6 +272,23 @@ export interface Secp256k1Wasm {
     publicKeyPtr: number,
     tweakNum256Ptr: number
   ) => 1 | 0;
+
+  /**
+  * Combine a _publicKey_ with another _publicKey_.
+  * Returns 1 if multiplying succeeded, 0 otherwise.
+  *
+  * @param contextPtr pointer to a context object
+  * @param publicKeyPtr pointer to a 64 byte space representing a public key
+  * @param otherPublicKeyPtr pointer to a 64 byte space representing a public key
+  */
+
+  readonly pubkeyCombine: (
+    contextPtr: number,
+    publicKeyPtr: number,
+    publicKeysToCombineWithPtr: number,
+    publicKeysToCombineWithArraySize: number
+  ) =>
+    1 | 0;
 
   /**
    * Read from WebAssembly memory by creating a new Uint8Array beginning at
@@ -625,6 +649,15 @@ const wrapSecp256k1Wasm = (
     heapU8.set(array, pointer);
     return pointer;
   },
+  mallocUint32Array: array => {
+    console.log('ARR', array);
+    console.log('LEN', array.length);
+    const pointer = instance.exports._malloc(4 * array.length);
+    console.log('PTR', pointer);
+    // tslint:disable-next-line:no-expression-statement
+    heapU32.set(array, pointer);
+    return pointer;
+  },
   privkeyTweakAdd: (contextPtr, secretKeyPtr, tweakNum256Ptr) =>
     instance.exports._secp256k1_ec_privkey_tweak_add(
       contextPtr,
@@ -681,6 +714,19 @@ const wrapSecp256k1Wasm = (
       publicKeyPtr,
       tweakNum256Ptr
     ),
+  pubkeyCombine: (
+    contextPtr,
+    publicKeyPtr,
+    publicKeysToCombineWithPtr,
+    publicKeysToCombineWithArraySize
+  ) => {
+    return instance.exports._secp256k1_ec_pubkey_combine(
+      contextPtr,
+      publicKeyPtr,
+      publicKeysToCombineWithPtr,
+      publicKeysToCombineWithArraySize
+    )
+  },
   readHeapU8: (pointer, bytes) => new Uint8Array(heapU8.buffer, pointer, bytes),
   readSizeT: pointer => {
     // tslint:disable-next-line:no-bitwise no-magic-numbers

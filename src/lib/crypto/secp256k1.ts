@@ -87,6 +87,38 @@ export interface Secp256k1 {
   ) => Uint8Array;
 
   /**
+   * Combines a `publicKey` with `otherPublicKey`.
+   *
+   * Throws if the any of the provided public keys could not be parsed, are 
+   * not valid or if the combination failed.
+   *
+   * The returned public key will be in uncompressed format.
+   *
+   * @param publicKey a public key.
+   * @param otherPublicKey a public key.
+   */
+  readonly combinePublicKeysCompressed: (
+    publicKey: Uint8Array,
+    otherPublicKey: Uint8Array
+  ) => Uint8Array;
+
+  /**
+   * Combines a `publicKey` with `otherPublicKey`.
+   *
+   * Throws if the any of the provided public keys could not be parsed, are 
+   * not valid or if the combination failed.
+   *
+   * The returned public key will be in uncompressed format.
+   *
+   * @param publicKey a public key.
+   * @param anotherPublicKey a public key.
+   */
+  readonly combinePublicKeysUncompressed: (
+    publicKey: Uint8Array,
+    otherPublicKey: Uint8Array
+  ) => Uint8Array;
+
+  /**
    * Compress a valid ECDSA public key. Returns a public key in compressed
    * format (33 bytes, header byte 0x02 or 0x03).
    *
@@ -436,6 +468,9 @@ const wrapSecp256k1Wasm = (
   const publicKeyScratch = secp256k1Wasm.malloc(maxPublicKeyLength);
   const messageHashScratch = secp256k1Wasm.malloc(messageHashLength);
   const internalPublicKeyPtr = secp256k1Wasm.malloc(internalPublicKeyLength);
+  const internalOtherPublicKeyPtr = secp256k1Wasm.malloc(internalPublicKeyLength);
+  const publicKeyPointersTab = new Uint32Array([internalOtherPublicKeyPtr, internalPublicKeyPtr]);
+  const tabPtr = secp256k1Wasm.mallocUint32Array(publicKeyPointersTab);
   const internalSigPtr = secp256k1Wasm.malloc(internalSigLength);
   const privateKeyPtr = secp256k1Wasm.malloc(privateKeyLength);
 
@@ -488,13 +523,13 @@ const wrapSecp256k1Wasm = (
   const getSerializedPublicKey = (compressed: boolean) =>
     compressed
       ? serializePublicKey(
-          compressedPublicKeyLength,
-          CompressionFlag.COMPRESSED
-        )
+        compressedPublicKeyLength,
+        CompressionFlag.COMPRESSED
+      )
       : serializePublicKey(
-          uncompressedPublicKeyLength,
-          CompressionFlag.UNCOMPRESSED
-        );
+        uncompressedPublicKeyLength,
+        CompressionFlag.UNCOMPRESSED
+      );
 
   const convertPublicKey = (
     compressed: boolean
@@ -509,16 +544,16 @@ const wrapSecp256k1Wasm = (
     secp256k1Wasm.heapU8.set(signature, sigScratch);
     return DER
       ? secp256k1Wasm.signatureParseDER(
-          contextPtr,
-          internalSigPtr,
-          sigScratch,
-          signature.length
-        ) === 1
+        contextPtr,
+        internalSigPtr,
+        sigScratch,
+        signature.length
+      ) === 1
       : secp256k1Wasm.signatureParseCompact(
-          contextPtr,
-          internalSigPtr,
-          sigScratch
-        ) === 1;
+        contextPtr,
+        internalSigPtr,
+        sigScratch
+      ) === 1;
   };
 
   const parseOrThrow = (signature: Uint8Array, DER: boolean) => {
@@ -643,41 +678,41 @@ const wrapSecp256k1Wasm = (
     privateKey,
     messageHash
   ) => {
-    fillMessageHashScratch(messageHash);
-    return withPrivateKey<Uint8Array>(privateKey, () => {
-      const failed =
-        secp256k1Wasm.sign(
-          contextPtr,
-          internalSigPtr,
-          messageHashScratch,
-          privateKeyPtr
-        ) !== 1;
+      fillMessageHashScratch(messageHash);
+      return withPrivateKey<Uint8Array>(privateKey, () => {
+        const failed =
+          secp256k1Wasm.sign(
+            contextPtr,
+            internalSigPtr,
+            messageHashScratch,
+            privateKeyPtr
+          ) !== 1;
 
-      if (failed) {
-        throw new Error(
-          'Failed to sign message hash. The private key is not valid.'
-        );
-      }
+        if (failed) {
+          throw new Error(
+            'Failed to sign message hash. The private key is not valid.'
+          );
+        }
 
-      if (DER) {
-        setLengthPtr(maxSigLength);
-        secp256k1Wasm.signatureSerializeDER(
-          contextPtr,
-          sigScratch,
-          lengthPtr,
-          internalSigPtr
-        );
-        return secp256k1Wasm.readHeapU8(sigScratch, getLengthPtr()).slice();
-      } else {
-        secp256k1Wasm.signatureSerializeCompact(
-          contextPtr,
-          sigScratch,
-          internalSigPtr
-        );
-        return secp256k1Wasm.readHeapU8(sigScratch, compactSigLength).slice();
-      }
-    });
-  };
+        if (DER) {
+          setLengthPtr(maxSigLength);
+          secp256k1Wasm.signatureSerializeDER(
+            contextPtr,
+            sigScratch,
+            lengthPtr,
+            internalSigPtr
+          );
+          return secp256k1Wasm.readHeapU8(sigScratch, getLengthPtr()).slice();
+        } else {
+          secp256k1Wasm.signatureSerializeCompact(
+            contextPtr,
+            sigScratch,
+            internalSigPtr
+          );
+          return secp256k1Wasm.readHeapU8(sigScratch, compactSigLength).slice();
+        }
+      });
+    };
 
   const verifyMessage = (messageHash: Uint8Array) => {
     fillMessageHashScratch(messageHash);
@@ -699,11 +734,11 @@ const wrapSecp256k1Wasm = (
     publicKey: Uint8Array,
     messageHash: Uint8Array
   ) => boolean) => (signature, publicKey, messageHash) =>
-    parsePublicKey(publicKey)
-      ? parseAndNormalizeSignature(signature, DER, normalize)
-        ? verifyMessage(messageHash)
-        : false
-      : false;
+      parsePublicKey(publicKey)
+        ? parseAndNormalizeSignature(signature, DER, normalize)
+          ? verifyMessage(messageHash)
+          : false
+        : false;
 
   const signMessageHashRecoverable = (
     privateKey: Uint8Array,
@@ -818,21 +853,21 @@ const wrapSecp256k1Wasm = (
     publicKey,
     tweakValue
   ) => {
-    if (!parsePublicKey(publicKey)) {
-      throw new Error('Failed to parse public key.');
-    }
-    fillMessageHashScratch(tweakValue);
-    if (
-      secp256k1Wasm.pubkeyTweakAdd(
-        contextPtr,
-        internalPublicKeyPtr,
-        messageHashScratch
-      ) !== 1
-    ) {
-      throw new Error('Adding failed');
-    }
-    return getSerializedPublicKey(compressed);
-  };
+      if (!parsePublicKey(publicKey)) {
+        throw new Error('Failed to parse public key.');
+      }
+      fillMessageHashScratch(tweakValue);
+      if (
+        secp256k1Wasm.pubkeyTweakAdd(
+          contextPtr,
+          internalPublicKeyPtr,
+          messageHashScratch
+        ) !== 1
+      ) {
+        throw new Error('Adding failed');
+      }
+      return getSerializedPublicKey(compressed);
+    };
 
   const mulTweakPublicKey = (
     compressed: boolean
@@ -840,21 +875,47 @@ const wrapSecp256k1Wasm = (
     publicKey,
     tweakValue
   ) => {
-    if (!parsePublicKey(publicKey)) {
-      throw new Error('Failed to parse public key.');
-    }
-    fillMessageHashScratch(tweakValue);
-    if (
-      secp256k1Wasm.pubkeyTweakMul(
-        contextPtr,
-        internalPublicKeyPtr,
-        messageHashScratch
-      ) !== 1
-    ) {
-      throw new Error('Multiplying failed');
-    }
-    return getSerializedPublicKey(compressed);
-  };
+      if (!parsePublicKey(publicKey)) {
+        throw new Error('Failed to parse public key.');
+      }
+      fillMessageHashScratch(tweakValue);
+      if (
+        secp256k1Wasm.pubkeyTweakMul(
+          contextPtr,
+          internalPublicKeyPtr,
+          messageHashScratch
+        ) !== 1
+      ) {
+        throw new Error('Multiplying failed');
+      }
+      return getSerializedPublicKey(compressed);
+    };
+
+  const combinePublicKey = (
+    compressed: boolean
+  ): ((publicKey: Uint8Array, otherPublicKey: Uint8Array) => Uint8Array) => (
+    publicKey,
+    otherPublicKey
+  ) => {
+      if (!parsePublicKey(publicKey)) {
+        throw new Error('Failed to parse public key.');
+      }
+      if (!parsePublicKey(otherPublicKey)) {
+        throw new Error('Failed to parse the second public key.');
+      }
+
+      if (
+        secp256k1Wasm.pubkeyCombine(
+          contextPtr,
+          internalPublicKeyPtr,
+          tabPtr,
+          publicKeyPointersTab.length
+        ) !== 1
+      ) {
+        throw new Error('Combination failed');
+      }
+      return getSerializedPublicKey(compressed);
+    };
 
   /**
    * The value of this precaution is debatable, especially in the context of
@@ -893,6 +954,8 @@ const wrapSecp256k1Wasm = (
     mulTweakPrivateKey,
     mulTweakPublicKeyCompressed: mulTweakPublicKey(true),
     mulTweakPublicKeyUncompressed: mulTweakPublicKey(false),
+    combinePublicKeysCompressed: combinePublicKey(true),
+    combinePublicKeysUncompressed: combinePublicKey(false),
     normalizeSignatureCompact: modifySignature(false, true),
     normalizeSignatureDER: modifySignature(true, true),
     recoverPublicKeyCompressed: recoverPublicKey(true),
